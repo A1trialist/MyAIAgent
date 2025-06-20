@@ -7,6 +7,14 @@ from openai import OpenAI
 import easyocr
 import warnings
 
+from rich.console import Console
+from rich.markdown import Markdown
+
+def display_markdown_with_rich(markdown_string):
+    console = Console()
+    md = Markdown(markdown_string)
+    console.print(md)
+
 def ocr(image_input):
     reader = easyocr.Reader(['ch_sim', 'en'])
     try:
@@ -39,16 +47,20 @@ def call_deepseek(messages, model, stream):
     return response
 
 def print_response(response, model, stream):
-    print(f"🐴🐴🐴({model}) 回答：")
+    print(f"Model({model}):\n")
     full_response= ''
     if stream:
         for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
                 content_chunk = chunk.choices[0].delta.content
-                print(content_chunk, end="", flush=True)
                 full_response += content_chunk
+        display_markdown_with_rich(full_response)
+        columns = os.get_terminal_size().columns
+        print('=' * columns)
     else:
-        print(response.choices[0].message.content)
+        print(f"    {response.choices[0].message.content}")
+        columns = os.get_terminal_size().columns
+        print('=' * columns)
         full_response = response.choices[0].message.content
     return full_response
 
@@ -56,16 +68,21 @@ def print_response(response, model, stream):
 def query_mode(query, contents, image=False, deep=False, stream=True):
     if contents != "":
         if image:
-            prompt = f"这是图片 ocr 后的文本：\n\n{contents}\n\n问题:{query}"
+            prompt = f"This is ocr result of the image:\n\n{contents}\n\nQuestion:{query}"
         else:
-            prompt = f"根据以下内容回答问题：\n\n{contents}\n\n问题:{query}"
+            prompt = f"Please answer the question based on this text:\n\n{contents}\n\nQuestion:{query}"
     else:
         prompt = query
 
-    professional_prompt=f"我在处理一个任务。如果你是一位专业人士，有更好的方法和建议吗？尽可能全面。任务是："
-    prompt = (f"{professional_prompt}{prompt}")
-    print(f"🐮🐮🐮 提问：")
-    print(f"{prompt}\n")
+    professional_prompt="""
+    Please answer my question with your output formatted in strict Markdown syntax, ensuring 
+    it's directly compatible with Glow for display. Keep concise. Determine your language 
+    according to my question. Please do not use bold or italian.
+    Try not use titles (e.g., #).
+    My question is:
+    """
+    original_prompt = prompt
+    prompt = (f"{professional_prompt}{original_prompt}")
 
     model = "deepseek-chat"
     if deep:
@@ -79,8 +96,7 @@ def query_mode(query, contents, image=False, deep=False, stream=True):
 
 def chat_mode(deep=False, stream=True):
     system_prompt = (
-        "你是一位经验丰富的专业助手，请提供全面、深入的建议和最佳实践，"
-        "包括但不限于：替代方案、潜在风险、优化策略和行业最佳实践。"
+        "Please give precise and crispy answers. Faster is better."
     )
 
     model = "deepseek-chat"
@@ -92,7 +108,7 @@ def chat_mode(deep=False, stream=True):
     print("--------------------------------------")
     while True:
         try:
-            user_input = input("\n🐮🐮🐮 提问：\n").strip()
+            user_input = input("\nUser\n").strip()
 
             if user_input.lower() in ['exit', 'quit', 'q']:
                 break
